@@ -1,0 +1,9 @@
+{
+  "id": "selection-toolbar",
+  "name": "Selection Toolbar",
+  "version": "0.1.0",
+  "minAppVersion": "1.14.0",
+  "description": "Apply inline formatting from a floating toolbar after selecting text.",
+  "author": "Selection Toolbar contributors",
+  "isDesktopOnly": true
+}

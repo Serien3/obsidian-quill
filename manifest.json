@@ -1,0 +1,9 @@
+{
+  "id": "quill",
+  "name": "Quill",
+  "version": "0.1.0",
+  "minAppVersion": "1.14.0",
+  "description": "Native Markdown formatting and line-side insertion tools for smoother writing.",
+  "author": "Quill contributors",
+  "isDesktopOnly": true
+}
