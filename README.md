@@ -25,31 +25,45 @@ Tested with **Obsidian 1.15.0 on Windows desktop**. Other versions and platforms
 
 ## Installation
 
-### Build from source
+### Option 1: Download a release (recommended)
 
-Use **Node.js 22 or later**, then run these commands from the repository root:
+No Node.js or build tools are required.
+
+1. Open [GitHub Releases](https://github.com/Serien3/obsidian-quill/releases) and choose a published version.
+2. Under **Assets**, download `quill-<version>.zip`. Do not download the automatically generated **Source code** archives; they do not contain the built plugin.
+3. Extract the ZIP and copy its `quill` folder into `<vault>/.obsidian/plugins/`. Create the `plugins` directory if it does not exist.
+
+The installed files should be:
+
+```text
+<vault>/.obsidian/plugins/quill/
+├── main.js
+├── manifest.json
+└── styles.css
+```
+
+If no published release is available yet, use the source build below.
+
+### Option 2: Clone and build from source
+
+Install **Git** and **Node.js 22 or later**, then run:
 
 ```sh
+git clone https://github.com/Serien3/obsidian-quill.git
+cd obsidian-quill
 npm ci
 npm run build
 ```
 
-The build produces the plugin files in `dist/`.
+The default branch may contain unreleased changes. To build a specific release, run `git checkout v<version>` after entering the repository and before `npm ci`, replacing `<version>` with the desired version.
 
-### Install manually
+Create `<vault>/.obsidian/plugins/quill/` and copy these three files from `dist/` into it: `main.js`, `manifest.json`, and `styles.css`.
 
-1. Create this directory inside your vault:
+### Enable or update Quill
 
-   ```text
-   <vault>/.obsidian/plugins/quill/
-   ```
+After either installation method, open **Settings → Community plugins** in Obsidian. Enable community plugins if necessary, then enable **Quill**. If Quill does not appear, restart Obsidian.
 
-2. Copy these three files from `dist/` into that directory:
-   - `main.js`
-   - `manifest.json`
-   - `styles.css`
-3. Open **Settings → Community plugins** in Obsidian. Enable community plugins if necessary, then enable **Quill**.
-4. When updating, replace only these three plugin files and reload the plugin. Back up an existing installation first.
+To update, back up the existing plugin directory and disable Quill first. Replace only `main.js`, `manifest.json`, and `styles.css` using either method above, then re-enable the plugin or restart Obsidian. Do not delete the entire plugin directory or overwrite other files; they may contain plugin settings.
 
 ## Usage
 

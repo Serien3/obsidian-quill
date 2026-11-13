@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Validate, build, and draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Check release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const manifest = JSON.parse(readFileSync('manifest.json', 'utf8'));
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          // Stable releases use vMAJOR.MINOR.PATCH; test releases can use e.g. v0.2.0-beta.1.
+          const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?$/;
+          if (!versionPattern.test(manifest.version) || pkg.version !== manifest.version || process.env.RELEASE_TAG !== `v${manifest.version}`) {
+            throw new Error('Tag must be v<version>, matching manifest.json and package.json (e.g. v0.1.0).');
+          }
+          appendFileSync(process.env.GITHUB_ENV, `RELEASE_VERSION=${manifest.version}\n`);
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run automated tests
+        run: npm test
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Package plugin
+        run: |
+          mkdir -p "$RUNNER_TEMP/quill-release/quill"
+          cp dist/main.js dist/manifest.json dist/styles.css "$RUNNER_TEMP/quill-release/quill/"
+          cd "$RUNNER_TEMP/quill-release"
+          zip -r "quill-${RELEASE_VERSION}.zip" quill
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=()
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            prerelease+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" \
+            --verify-tag \
+            --draft \
+            --title "Quill ${RELEASE_VERSION}" \
+            --generate-notes \
+            "${prerelease[@]}" \
+            "$RUNNER_TEMP/quill-release/quill-${RELEASE_VERSION}.zip"

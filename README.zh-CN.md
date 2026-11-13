@@ -25,31 +25,45 @@ Quill 为 Obsidian 提供便捷的文字格式与插入工具，减少查找命�
 
 ## Installation
 
-### 从源码构建
+### 方式一：下载已编译的 Release（推荐）
 
-使用 **Node.js 22 或更高版本**，在仓库根目录执行：
+无需安装 Node.js 或构建工具。
+
+1. 打开 [GitHub Releases](https://github.com/Serien3/obsidian-quill/releases)，选择一个已发布版本。
+2. 在 **Assets** 中下载 `quill-<版本号>.zip`。不要下载 GitHub 自动生成的 **Source code** 压缩包，它们不包含已编译的插件。
+3. 解压 ZIP，将其中的 `quill` 文件夹复制到 `<vault>/.obsidian/plugins/`。如果 `plugins` 目录不存在，请先创建。
+
+安装后的目录结构应为：
+
+```text
+<vault>/.obsidian/plugins/quill/
+├── main.js
+├── manifest.json
+└── styles.css
+```
+
+如果暂时没有已公开发布的版本，可以使用下面的源码构建方式。
+
+### 方式二：Clone 源码并自行构建
+
+安装 **Git** 和 **Node.js 22 或更高版本**，然后执行：
 
 ```sh
+git clone https://github.com/Serien3/obsidian-quill.git
+cd obsidian-quill
 npm ci
 npm run build
 ```
 
-插件构建文件输出到 `dist/`。
+默认分支可能包含尚未发布的改动。若要构建指定发布版本，请在进入仓库后、执行 `npm ci` 前运行 `git checkout v<版本号>`，将 `<版本号>` 替换为目标版本。
 
-### 手动安装
+创建 `<vault>/.obsidian/plugins/quill/`，将 `dist/` 中的三个文件复制到该目录：`main.js`、`manifest.json`、`styles.css`。
 
-1. 在你的 vault 中创建目录：
+### 启用与更新 Quill
 
-   ```text
-   <vault>/.obsidian/plugins/quill/
-   ```
+通过任一方式安装后，在 Obsidian 中打开 **设置 → 第三方插件**，按需启用第三方插件功能，然后启用 **Quill**。如果列表中没有出现 Quill，请重启 Obsidian。
 
-2. 将 `dist/` 中的三个文件复制到该目录：
-   - `main.js`
-   - `manifest.json`
-   - `styles.css`
-3. 在 Obsidian 中打开 **设置 → 第三方插件**，按需启用第三方插件功能，然后启用 **Quill**。
-4. 更新时先备份已有安装，只替换本插件这三个文件，再重新加载插件。
+更新时先备份已有插件目录并停用 Quill，再通过上述任一方式仅替换 `main.js`、`manifest.json`、`styles.css`，然后重新启用插件或重启 Obsidian。不要删除整个插件目录或覆盖其他文件，以免丢失插件配置。
 
 ## Usage
 
