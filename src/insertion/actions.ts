@@ -1,3 +1,5 @@
+import type { EditorView } from '@codemirror/view';
+import { beginInsertion, endInsertion, insertionBoundary } from './compound-edit';
 import type { EditorState } from '@codemirror/state';
 import type { Editor } from 'obsidian';
 import type { NativeInsertion, InsertionAction } from './contracts';
@@ -43,3 +45,30 @@ export const insertionActions: readonly { id: InsertionAction; label: string; ic
   { id: 'table', label: '表格', icon: 'table', aliases: ['table'], separator: true },
   { id: 'divider', label: '分隔线', icon: 'minus', aliases: ['水平线', 'divider', 'horizontal rule'] }
 ];
+
+/** Consumes only the query; native commands retain ownership of block semantics. */
+export function applySlashInsertion(action: InsertionAction, view: EditorView, target: InsertionTarget,
+  from: number, to: number, host: NativeInsertion, alive: () => boolean): boolean {
+  let expected = target.state;
+  let prepared = false;
+  const query = expected.doc.sliceString(from, to);
+  const current = () => alive() && view.state.doc === expected.doc && view.state.selection.eq(expected.selection)
+    && insertionTarget(view.state, host)?.editor === target.editor;
+  try {
+    const result = host.execute(action, target.editor, current, () => {
+      if (!current()) return false;
+      const tr = view.state.update({ changes: { from, to }, selection: { anchor: from }, effects: beginInsertion,
+        annotations: insertionBoundary });
+      expected = tr.state;
+      prepared = true;
+      view.dispatch(tr);
+      return current();
+    });
+    if (!result && prepared && current()) {
+      view.dispatch({ changes: { from, insert: query }, selection: target.state.selection });
+    }
+    return result;
+  } finally {
+    if (prepared && alive()) view.dispatch(endInsertion);
+  }
+}

@@ -22,6 +22,7 @@ npm run build
 | 选区查询单测 | `tests/native-selection.test.ts` | 真实 CodeMirror 状态与人工宿主 token 树，验证展示态及格式标记显隐后的选区身份；不证明宿主 token 契约仍然有效 |
 | 插入宿主接入单测 | `tests/native-insertion.test.ts` | 宿主边界替身与人工语法快照验证来源身份、区域查询和原生命令调用；不证明真实 Obsidian 协议已通过 |
 | 插入交互集成 | `tests/insert-menu.browser.test.ts` | 真实 Chromium 与 CodeMirror 验证完整菜单、格式／禁用展示、搜索／键盘与打开命令、布局／列表滚动、所属窗口坐标、上下文退出、光标／焦点、来源失效、清理及与旧工具栏共存；宿主能力由替身提供 |
+| 斜杠交互集成 | `tests/slash-menu.browser.test.ts` | 真实键入触发、正文搜索与焦点、结构区域、键盘与鼠标、失效及失败恢复、一次撤销／重做、与按钮入口共享列表；使用宿主替身，不能证明真实 Obsidian 或系统输入法行为 |
 | 浏览器集成 | `tests/toolbar.browser.test.ts` | 真实 Chromium、CodeMirror 与 CSS，验证工具栏、选区、内容修改、布局和生命周期；多数选区使用合成事件与直接设置状态，宿主能力由替身提供 |
 
 类型检查、测试、构建分别执行；构建成功不代表测试通过。
@@ -41,6 +42,7 @@ npm run build
 - `tests/obsidian/native-formatting.mjs`：八个原生命令的完整场景或烟雾矩阵。
 - `tests/obsidian/highlight-menu.mjs`：高亮颜色、切换、宿主对照及菜单生命周期。
 - `tests/obsidian/native-links.mjs`：链接设置、右键菜单对照、输入、导航及撤销重做。
+- `tests/obsidian/slash-menu.mjs`：源码模式与 Live Preview 下的斜杠键入、全部动作与原生命令对照、取消、切换笔记及一次撤销重做；系统输入法需额外人工验证。
 - `tests/obsidian/underline.mjs`：真实拖选、渲染内容映射、结构安全、保存重开及停用后的可读性。
 
 必须使用独立 userdata、可丢弃的 `quill-host-*/vault`，不得连接 `obsidian_test-vault/` 或用户工作库。脚本核对实际 vault 路径后才写入；同一宿主实例串行执行。安装本次构建、启用插件和启动宿主仍需要人工准备。

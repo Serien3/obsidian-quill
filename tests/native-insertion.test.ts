@@ -183,3 +183,44 @@ test('layout invalidation compares the original editor identity rather than a mu
   expect(onExit).toHaveBeenCalledOnce();
   dispose();
 });
+
+test('preparation runs only after focus and source checks and is rechecked before the command', () => {
+  const { host, editor, app, executeCommandById } = fixture();
+  let current = true;
+  const prepare = vi.fn(() => {
+    expect(editor.focus).toHaveBeenCalledOnce();
+    current = false;
+    return true;
+  });
+  expect(host.execute('heading2', editor, () => current, prepare)).toBe(false);
+  expect(prepare).toHaveBeenCalledOnce();
+  expect(executeCommandById).not.toHaveBeenCalled();
+  app.workspace.activeEditor.editor = {} as Editor;
+  prepare.mockClear();
+  expect(host.execute('heading2', editor, () => true, prepare)).toBe(false);
+  expect(prepare).not.toHaveBeenCalled();
+});
+
+test('refused preparation or command becoming unavailable during preparation never executes', () => {
+  const { host, editor, app, executeCommandById } = fixture();
+  expect(host.execute('heading2', editor, () => true, () => false)).toBe(false);
+  expect(host.execute('heading2', editor, () => true, () => {
+    delete app.commands.commands['editor:set-heading-2'];
+    return true;
+  })).toBe(false);
+  expect(executeCommandById).not.toHaveBeenCalled();
+});
+
+test('body start follows host-confirmed prefixes and refuses inline code or math', () => {
+  const { host } = fixture();
+  for (const [doc, scopes, expected] of [
+    ['正文', [], 0], ['  正文', [], 2], ['>正文', ['quote'], 1],
+    ['> - [ ] 正文', ['quote', 'formatting-list-ul', 'formatting-task'], 8],
+    ['## 正文', ['header-2'], 3], ['1. 正文', ['formatting-list-ol'], 3],
+    ['>正文', [], 0], ['内容', ['inline-code'], null], ['内容', ['math'], null]
+  ] as const) {
+    const state = EditorState.create({ doc, selection: { anchor: doc.length }, extensions: [hostLanguage([scopes])] });
+    expect(host.bodyStart(state), doc).toBe(expected);
+  }
+  expect(host.bodyStart(EditorState.create({ doc: 'no syntax' }))).toBeNull();
+});

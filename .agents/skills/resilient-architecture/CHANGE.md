@@ -44,7 +44,7 @@ Some structure is cheap to commit to early and pays off whatever the product tur
 - which way dependencies point;
 - where I/O and each cross-cutting concern enter: one seam each;
 - where outside data is parsed into typed values;
-- a small set of taste invariants that keep the code uniform enough to imitate safely.
+- a small set of conventions that keep the code uniform enough to imitate safely.
 
 Other structure is a bet on what the product will become, and is usually better deferred until there's evidence:
 
@@ -62,7 +62,7 @@ When a decision is deferred, say so explicitly and name the signal that would re
 
 ## From MVP to growth
 
-An MVP should be small, direct, and deep: few modules, little ceremony, the early commitments above held firmly, and plain code everywhere else. Its features may be thrown away. Its patterns usually aren't, because everything built afterwards copies them. So a handful of good invariants in the MVP matters more than how complete its features are.
+An MVP should be small, direct, and deep: few modules, little ceremony, the early commitments above held firmly, and plain code everywhere else. Its features may be thrown away. Its patterns usually aren't, because everything built afterwards copies them. So getting those few commitments right in the MVP matters more than how complete its features are.
 
 As scope widens, second examples arrive, and that's when hypothetical seams become real ones. Signals that it's time to restructure:
 
@@ -71,5 +71,3 @@ As scope widens, second examples arrive, and that's when hypothetical seams beco
 - the same bug gets fixed in several callers: locality has been lost;
 - modules fail the deletion test, because the structure outgrew the logic or never had any;
 - people (or agents) keep asking where something should go, and getting different answers.
-
-Restructuring is much cheaper when the architecture is expressed as checks rather than habits. Change the invariant, and the check lists every place that now violates it; the migration becomes a bounded, verifiable job instead of an archaeology project. An architecture held by checks is not only more stable. It is also easier to change on purpose.

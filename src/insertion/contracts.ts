@@ -10,9 +10,11 @@ export interface NativeInsertion {
   watchContext(onChange: () => void): () => void;
   source(state: EditorState): Editor | null;
   region(state: EditorState): 'text' | 'code' | 'math' | 'table' | 'properties' | 'unknown';
+  /** Host-confirmed body prefix; null when syntax is unavailable or the caret is in inline code/math. */
+  bodyStart(state: EditorState): number | null;
   checked(state: EditorState): ReadonlySet<InsertionAction>;
   available(action: InsertionAction, editor: Editor): boolean;
-  /** Recheck availability and isCurrent after focus, before exactly one command. */
-  execute(action: InsertionAction, editor: Editor, isCurrent: () => boolean): boolean;
+  /** Focus and recheck before preparing; recheck the prepared target before one command. */
+  execute(action: InsertionAction, editor: Editor, isCurrent: () => boolean, prepare?: () => boolean): boolean;
 }
 

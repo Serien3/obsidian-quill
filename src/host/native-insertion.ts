@@ -59,6 +59,32 @@ export function createNativeInsertion(app: App, info: StateField<MarkdownFileInf
       };
     },
     available,
+    bodyStart(state) {
+      const line = state.doc.lineAt(state.selection.main.head);
+      const tree = ensureSyntaxTree(state, line.to);
+      if (!tree) return null;
+      for (let node: ReturnType<typeof tree.resolveInner> | null = tree.resolveInner(state.selection.main.head, -1); node; node = node.parent) {
+        const scopes = node.name.split('_');
+        if (scopes.includes('inline-code') || scopes.includes('math')) return null;
+      }
+      const scopes = new Set<string>();
+      tree.iterate({ from: line.from, to: line.to, enter(node) {
+        for (const scope of node.name.split('_')) scopes.add(scope);
+      } });
+      let prefix = line.text.match(/^\s*/u)![0].length;
+      // Prefix syntax is interpreted only after the host identifies the structure.
+      if (scopes.has('quote') || scopes.has('formatting-quote')) {
+        prefix += line.text.slice(prefix).match(/^(?:>[^\S\n]*)+/u)?.[0].length ?? 0;
+      }
+      if (scopes.has('formatting-list-ul') || scopes.has('formatting-list-ol')) {
+        prefix += line.text.slice(prefix).match(/^(?:[-+*]|\d+[.)])\s+/u)?.[0].length ?? 0;
+        if (scopes.has('formatting-task')) prefix += line.text.slice(prefix).match(/^\[[^\]]\]\s*/u)?.[0].length ?? 0;
+      }
+      if ([1, 2, 3, 4, 5, 6].some(level => scopes.has(`header-${level}`))) {
+        prefix += line.text.slice(prefix).match(/^#{1,6}\s+/u)?.[0].length ?? 0;
+      }
+      return line.from + prefix;
+    },
     checked(state) {
       const checked = new Set<InsertionAction>();
       const line = state.doc.lineAt(state.selection.main.head);
@@ -100,10 +126,12 @@ export function createNativeInsertion(app: App, info: StateField<MarkdownFileInf
       } });
       return region;
     },
-    execute(action, editor, isCurrent): boolean {
+    execute(action, editor, isCurrent, prepare): boolean {
       try {
         if (!available(action, editor)) return false;
         editor.focus();
+        if (!available(action, editor) || !isCurrent()) return false;
+        if (prepare && !prepare()) return false;
         if (!available(action, editor) || !isCurrent()) return false;
         return (app as CommandHost).commands?.executeCommandById(commands[action]) ?? false;
       } catch {
