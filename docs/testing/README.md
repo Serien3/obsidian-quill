@@ -43,6 +43,7 @@ npm run build
 - `tests/obsidian/highlight-menu.mjs`：高亮颜色、切换、宿主对照及菜单生命周期。
 - `tests/obsidian/native-links.mjs`：链接设置、右键菜单对照、输入、导航及撤销重做。
 - `tests/obsidian/slash-menu.mjs`：源码模式与 Live Preview 下的斜杠键入、全部动作与原生命令对照、取消、切换笔记及一次撤销重做；系统输入法需额外人工验证。
+- `tests/obsidian/insertion-layout.mjs`：宽窄视口下插件开关前后的正文布局，以及插入按钮与段落的间距、对齐。
 - `tests/obsidian/underline.mjs`：真实拖选、渲染内容映射、结构安全、保存重开及停用后的可读性。
 
 必须使用独立 userdata、可丢弃的 `quill-host-*/vault`，不得连接 `obsidian_test-vault/` 或用户工作库。脚本核对实际 vault 路径后才写入；同一宿主实例串行执行。安装本次构建、启用插件和启动宿主仍需要人工准备。

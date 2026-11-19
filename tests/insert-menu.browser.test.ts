@@ -3,7 +3,7 @@ import { userEvent } from 'vitest/browser';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Compartment, EditorSelection, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
 import { foldGutter, foldService } from '@codemirror/language';
-import { EditorView, lineNumbers } from '@codemirror/view';
+import { Decoration, EditorView, lineNumbers } from '@codemirror/view';
 import type { App, Editor, MarkdownFileInfo } from 'obsidian';
 import { createNativeInsertion } from '../src/host/native-insertion';
 import { lineInsertMenu } from '../src/insertion/insert-menu';
@@ -20,6 +20,7 @@ function fixture(doc = '正文内容', scopes: readonly (readonly string[])[] = 
   const editor = { focus: () => view.focus() } as Editor;
   const info = StateField.define<MarkdownFileInfo>({ create: () => ({ editor } as MarkdownFileInfo), update: value => value });
   const source = new Compartment();
+  const insertion = new Compartment();
   const executeCommandById = vi.fn(() => {
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '## 正文内容' }, selection: { anchor: 5 } });
     return true;
@@ -34,10 +35,12 @@ function fixture(doc = '正文内容', scopes: readonly (readonly string[])[] = 
   parent.style.cssText = 'width:500px;height:220px;margin:60px;';
   ownerDocument.body.append(parent);
   const entry = lineInsertMenu(createNativeInsertion(app as unknown as App, info), element => { element.append(document.createElementNS("http://www.w3.org/2000/svg", "svg")); });
-  view = new EditorView({ parent, state: EditorState.create({ doc, selection: { anchor: Math.min(2, doc.length) }, extensions: [...extensions, source.of(info), hostLanguage(scopes), entry.extension] }) });
+  view = new EditorView({ parent, state: EditorState.create({ doc, selection: { anchor: Math.min(2, doc.length) }, extensions: [...extensions, source.of(info), hostLanguage(scopes), insertion.of(entry.extension)] }) });
+  // Existing host whitespace, independent of the insertion extension and its document.
+  view.contentDOM.style.padding = '12px 0 12px 40px';
   views.push(view);
   view.focus();
-  return { view, editor, app, executeCommandById, source, entry, emit, setMode };
+  return { view, editor, app, executeCommandById, source, insertion, entry, emit, setMode };
 }
 
 const plus = () => document.querySelector<HTMLButtonElement>('[aria-label="打开插入菜单"]');
@@ -230,7 +233,8 @@ test('wrapped source text keeps one entry at the first visual line without expan
   const first = view.coordsAtPos(0)!;
   const last = view.coordsAtPos(doc.length - 2)!;
   expect(last.top).toBeGreaterThan(first.top);
-  expect(Math.abs(plus()!.getBoundingClientRect().top - first.top)).toBeLessThan(2);
+  const button = plus()!.getBoundingClientRect();
+  expect(Math.abs((button.top + button.bottom) / 2 - (first.top + first.bottom) / 2)).toBeLessThan(1);
   await open();
   expect(view.state.selection.main.anchor).toBe(doc.length - 2);
   expect(view.state.selection.main.empty).toBe(true);
@@ -604,15 +608,76 @@ test('a partially visible wrapped source line keeps its menu in the window until
 });
 
 
-// Layout regressions exercise the real CodeMirror gutters and stable editor padding.
-test('the operation band clears line numbers and folding controls and does not shift when hidden', async () => {
+test.each([false, true])('enabling and removing insertion preserves the host layout (centered=%s)', async centered => {
+  const { view, insertion, entry } = fixture('正文自动换行测试。'.repeat(30), [], [EditorView.lineWrapping]);
+  if (centered) {
+    view.dom.parentElement!.style.width = '800px';
+    Object.assign(view.contentDOM.style, { flex: '0 0 auto', width: '320px', marginInline: 'auto' });
+  }
+  await measured();
+  const snapshot = () => {
+    const line = view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect();
+    return { left: line.left, width: line.width, height: line.height, editorWidth: view.dom.getBoundingClientRect().width };
+  };
+  const enabled = snapshot();
+  view.dispatch({ effects: insertion.reconfigure([]) });
+  await measured();
+  expect(snapshot()).toEqual(enabled);
+  expect(plus()).toBeNull();
+  view.dispatch({ effects: insertion.reconfigure(entry.extension) });
+  await vi.waitFor(() => expect(plus()?.style.visibility).toBe('visible'));
+  expect(snapshot()).toEqual(enabled);
+  expect(plus()!.getBoundingClientRect().right).toBeCloseTo(enabled.left - 8, 0);
+});
+
+test.each(['', '# 大标题', '  - 缩进列表', '> 引用'])('entry aligns with the content column and first row for %j', async doc => {
+  const { view } = fixture(doc, [], [EditorView.decorations.of(Decoration.set([
+    Decoration.line({ attributes: { style: doc.startsWith('#') ? 'font-size:32px;line-height:1.6' : 'padding-left:60px' } }).range(0)
+  ]))]);
+  await vi.waitFor(() => expect(plus()?.style.visibility).toBe('visible'));
+  const button = plus()!.getBoundingClientRect();
+  const first = view.coordsAtPos(0)!;
+  expect(button.right).toBeCloseTo(view.contentDOM.getBoundingClientRect().left + 40 - 8, 0);
+  expect((button.top + button.bottom) / 2).toBeCloseTo((first.top + first.bottom) / 2, 0);
+  expect(button.width).toBe(24);
+  expect(button.height).toBe(24);
+});
+
+test('entry follows centered content when its pane resizes without a window resize', async () => {
+  const { view } = fixture();
+  view.dom.parentElement!.style.width = '800px';
+  Object.assign(view.contentDOM.style, { flex: '0 0 auto', width: '320px', marginInline: 'auto' });
+  await vi.waitFor(() => expect(plus()?.style.visibility).toBe('visible'));
+  await vi.waitFor(() => expect(plus()!.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect().left - 8, 0));
+  const left = plus()!.getBoundingClientRect().left;
+  view.dom.parentElement!.style.width = '600px';
+  await vi.waitFor(() => expect(plus()!.getBoundingClientRect().left).toBeCloseTo(left - 100, 0));
+  expect(plus()!.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect().left - 8, 0);
+});
+
+test('insufficient space hides only the button while the command and an open menu stay usable', async () => {
+  const { view, entry, executeCommandById } = fixture('正文', [], [lineNumbers(), foldGutter()]);
+  await open();
+  view.contentDOM.style.paddingLeft = '0';
+  await vi.waitFor(() => expect(plus()?.style.visibility).toBe('hidden'));
+  expect(menu()).not.toBeNull();
+  heading2().click();
+  expect(executeCommandById).toHaveBeenCalledOnce();
+  expect(menu()).toBeNull();
+  expect(entry.open(view)).toBe(true);
+  await vi.waitFor(() => expect(menu()!.style.opacity).toBe('1'));
+  expect(plus()?.style.visibility).toBe('hidden');
+});
+
+test('the paragraph entry clears line numbers and folding controls and does not shift when hidden', async () => {
   const { view } = fixture('标题行\n下一行\n  - 列表行', [], [lineNumbers(), foldGutter(), foldService.of((_state, from) => from === 0 ? { from: 3, to: 7 } : null)]);
   await measured();
   const button = plus()!;
   const line = view.contentDOM.querySelector('.cm-line')!;
   const left = line.getBoundingClientRect().left;
   const bandLeft = button.getBoundingClientRect().left;
-  expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(view.dom.querySelector('.cm-gutters')!.getBoundingClientRect().left);
+  expect(button.getBoundingClientRect().left).toBeGreaterThanOrEqual(view.dom.querySelector('.cm-gutters')!.getBoundingClientRect().right);
+  expect(button.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.getBoundingClientRect().left + 40 - 8, 0);
   expect(view.dom.querySelector('.cm-foldGutter')).not.toBeNull();
   const rect = button.getBoundingClientRect();
   expect(document.elementFromPoint(rect.left + 12, rect.top + 12)).toBe(button);
@@ -652,6 +717,9 @@ test('menu geometry uses its own document window rather than the main window', a
   entry.open(view);
   const ownMenu = owner.querySelector<HTMLElement>('[role="menu"][aria-label="插入"]')!;
   await vi.waitFor(() => expect(ownMenu.style.opacity).toBe('1'));
+  const ownButton = owner.querySelector<HTMLElement>('.line-insert-button')!;
+  expect(ownButton.style.visibility).toBe('visible');
+  expect(ownButton.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect().left - 8, 0);
   const rect = ownMenu.getBoundingClientRect();
   expect(rect.right).toBeLessThanOrEqual(owner.defaultView!.innerWidth);
   expect(rect.bottom).toBeLessThanOrEqual(owner.defaultView!.innerHeight);

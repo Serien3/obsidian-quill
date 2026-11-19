@@ -17,6 +17,7 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
     list: InsertionList | null = null;
     compositionContext: EventTarget | null = null;
     releaseContext: (() => void) | null = null;
+    resizeObserver: ResizeObserver;
 
     constructor(readonly view: EditorView) {
       const doc = view.dom.ownerDocument;
@@ -36,6 +37,10 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
       doc.defaultView!.addEventListener('resize', this.onResize);
       doc.addEventListener('focusin', this.onFocusIn, true);
       doc.addEventListener('visibilitychange', this.onVisibilityChange);
+      doc.addEventListener('scroll', this.onResize, true);
+      this.resizeObserver = new doc.defaultView!.ResizeObserver(this.onResize);
+      this.resizeObserver.observe(view.dom);
+      this.resizeObserver.observe(view.contentDOM);
       this.position();
     }
 
@@ -96,9 +101,9 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
         read: () => {
           if (this.destroyed || (!this.view.hasFocus && !this.menu) || !insertionTarget(this.view.state, host)) return null;
           const line = this.view.state.doc.lineAt(this.view.state.selection.main.head);
-          const point = this.view.coordsAtPos(this.slash?.from ?? line.from);
-          const bounds = this.view.dom.getBoundingClientRect();
-          if (!point) return null;
+          const firstRow = this.view.coordsAtPos(line.from);
+          const point = this.slash ? this.view.coordsAtPos(this.slash.from) : firstRow;
+          if (!point || !firstRow) return null;
           const menu = this.menu;
           const win = this.view.dom.ownerDocument.defaultView!;
           const scroller = this.view.scrollDOM.getBoundingClientRect();
@@ -107,20 +112,30 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
           if (this.slash && (point.bottom <= visibleTop || point.top >= visibleBottom)) return null;
           const block = this.view.lineBlockAt(line.from);
           if (this.view.documentTop + block.bottom <= visibleTop || this.view.documentTop + block.top >= visibleBottom) return null;
-          const left = bounds.left + 4;
-          const buttonVisible = point.bottom > visibleTop && point.top < visibleBottom;
-          if (!menu) return { left, top: point.top, buttonVisible, menu, layout: null };
+          // Anchor to the content column, independently of list/heading indentation.
+          // The button uses existing host whitespace and never reserves layout space.
+          const content = this.view.contentDOM.getBoundingClientRect();
+          const columnLeft = content.left + parseFloat(win.getComputedStyle(this.view.contentDOM).paddingLeft);
+          const button = this.button.getBoundingClientRect();
+          const left = columnLeft - 8 - button.width;
+          const top = (firstRow.top + firstRow.bottom - button.height) / 2;
+          const gutters = this.view.dom.querySelector('.cm-gutters')?.getBoundingClientRect();
+          const availableLeft = Math.max(0, this.view.dom.getBoundingClientRect().left, scroller.left, gutters?.right ?? 0);
+          const buttonVisible = left >= availableLeft && left + button.width <= Math.min(scroller.right, win.innerWidth)
+            && firstRow.bottom > visibleTop && firstRow.top < visibleBottom
+            && top >= visibleTop && top + button.height <= visibleBottom;
+          if (!menu) return { left, top, buttonVisible, menu, layout: null };
           const list = menu.querySelector<HTMLElement>('.line-insert-list')!;
           const rect = menu.getBoundingClientRect();
           const desired = Math.min(420, list.scrollHeight + rect.height - list.clientHeight);
           // The first visual row may have scrolled out while a wrapped source line is still visible.
-          const anchorTop = Math.max(visibleTop, Math.min(point.top, visibleBottom - 24));
+          const anchorTop = Math.max(visibleTop, Math.min(this.slash ? point.top : top, visibleBottom - 24));
           const below = win.innerHeight - 8 - (anchorTop + 24);
           const above = anchorTop - 8;
           const up = below < desired && above > below;
           const height = Math.max(0, Math.min(desired, up ? above : below));
-          return { left, top: point.top, buttonVisible, menu, layout: {
-            left: Math.max(8, Math.min(this.slash ? point.left : left + 24, win.innerWidth - rect.width - 8)),
+          return { left, top, buttonVisible, menu, layout: {
+            left: Math.max(8, Math.min(this.slash ? point.left : left + button.width, win.innerWidth - rect.width - 8)),
             top: up ? anchorTop - height : anchorTop + 24,
             height
           } };
@@ -273,11 +288,13 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
       this.view.dom.ownerDocument.defaultView!.removeEventListener('resize', this.onResize);
       this.view.dom.ownerDocument.removeEventListener('focusin', this.onFocusIn, true);
       this.view.dom.ownerDocument.removeEventListener('visibilitychange', this.onVisibilityChange);
+      this.view.dom.ownerDocument.removeEventListener('scroll', this.onResize, true);
+      this.resizeObserver.disconnect();
       this.button.remove();
     }
   }, { decorations: plugin => plugin.decorations });
   return {
-    extension: [EditorView.editorAttributes.of({ class: 'line-insert-editor' }), compoundInsertion, plugin,
+    extension: [compoundInsertion, plugin,
       Prec.highest(EditorView.domEventHandlers({
         keydown: (event, view) => view.plugin(plugin)?.keydown(event) ?? false,
         compositionend: (_event, view) => {
