@@ -17,6 +17,10 @@ try {
   await verifyVault();
   assert(await page.evaluate(() => Boolean(app.plugins.plugins.quill)), 'Install and enable the current build first.');
   verified = true;
+  await page.evaluate(() => {
+    if (window.electronWindow.isMinimized()) window.electronWindow.restore();
+    window.electronWindow.show(); window.electronWindow.focus();
+  });
   await page.bringToFront();
   cdp = await page.context().newCDPSession(page);
   const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
@@ -63,21 +67,25 @@ try {
           assert(Math.abs(value - enabled.lines[index][axis]) < 0.5, `Body layout shifted: source=${source}, width=${width}`);
         }));
       }
-      await page.evaluate(() => app.workspace.activeEditor.editor.focus());
+      // Exercise the user's actual entry path after reload, including host caret layout.
+      await page.locator('.workspace-leaf.mod-active .cm-line').filter({ hasText: '这是一段用于观察正文居中和自动换行的文字。' }).click({ position: { x: 16, y: 10 } });
       await settle();
+      await page.waitForTimeout(300);
       const geometry = await page.evaluate(() => {
         const view = app.workspace.activeEditor.editor.cm;
         const button = document.querySelector('.line-insert-button');
         const rect = button.getBoundingClientRect();
-        const content = view.contentDOM.getBoundingClientRect();
-        const columnLeft = content.left + parseFloat(getComputedStyle(view.contentDOM).paddingLeft);
-        const first = view.coordsAtPos(view.state.doc.lineAt(view.state.selection.main.head).from);
+        const from = view.state.doc.lineAt(view.state.selection.main.head).from;
+        const node = view.domAtPos(from).node;
+        const line = (node.nodeType === 1 ? node : node.parentElement).closest('.cm-line');
+        const columnLeft = line.getBoundingClientRect().left;
+        const first = view.coordsAtPos(from);
         return { visible: getComputedStyle(button).visibility === 'visible', gap: columnLeft - rect.right,
           centerError: (rect.top + rect.bottom - first.top - first.bottom) / 2 };
       });
       if (width === 1400) assert(geometry.visible, 'The wide editor must show the paragraph entry.');
       if (geometry.visible) {
-        assert(Math.abs(geometry.gap - 8) < 0.5, 'Entry must sit 8px before the content column.');
+        assert(Math.abs(geometry.gap - 16) < 0.5, `Entry must sit 16px before the content column: ${JSON.stringify({ source, width, ...geometry })}`);
         assert(Math.abs(geometry.centerError) < 0.5, 'Entry must be centered on the first visual row.');
       }
       console.log('Passed insertion layout:', { source, width, ...geometry });

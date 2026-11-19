@@ -18,6 +18,7 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
     compositionContext: EventTarget | null = null;
     releaseContext: (() => void) | null = null;
     resizeObserver: ResizeObserver;
+    measuredLine: Element | null = null;
 
     constructor(readonly view: EditorView) {
       const doc = view.dom.ownerDocument;
@@ -104,6 +105,9 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
           const firstRow = this.view.coordsAtPos(line.from);
           const point = this.slash ? this.view.coordsAtPos(this.slash.from) : firstRow;
           if (!point || !firstRow) return null;
+          const node = this.view.domAtPos(line.from).node;
+          const lineElement = (node.nodeType === 1 ? node as Element : node.parentElement)?.closest('.cm-line');
+          if (!lineElement) return null;
           const menu = this.menu;
           const win = this.view.dom.ownerDocument.defaultView!;
           const scroller = this.view.scrollDOM.getBoundingClientRect();
@@ -112,19 +116,18 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
           if (this.slash && (point.bottom <= visibleTop || point.top >= visibleBottom)) return null;
           const block = this.view.lineBlockAt(line.from);
           if (this.view.documentTop + block.bottom <= visibleTop || this.view.documentTop + block.top >= visibleBottom) return null;
-          // Anchor to the content column, independently of list/heading indentation.
-          // The button uses existing host whitespace and never reserves layout space.
-          const content = this.view.contentDOM.getBoundingClientRect();
-          const columnLeft = content.left + parseFloat(win.getComputedStyle(this.view.contentDOM).paddingLeft);
+          // Hosts can inset individual line boxes inside a full-width contentDOM.
+          // Their outer edge excludes hanging list indentation and inline markers.
+          const columnLeft = lineElement.getBoundingClientRect().left;
           const button = this.button.getBoundingClientRect();
-          const left = columnLeft - 8 - button.width;
+          const left = columnLeft - 16 - button.width;
           const top = (firstRow.top + firstRow.bottom - button.height) / 2;
           const gutters = this.view.dom.querySelector('.cm-gutters')?.getBoundingClientRect();
           const availableLeft = Math.max(0, this.view.dom.getBoundingClientRect().left, scroller.left, gutters?.right ?? 0);
           const buttonVisible = left >= availableLeft && left + button.width <= Math.min(scroller.right, win.innerWidth)
             && firstRow.bottom > visibleTop && firstRow.top < visibleBottom
             && top >= visibleTop && top + button.height <= visibleBottom;
-          if (!menu) return { left, top, buttonVisible, menu, layout: null };
+          if (!menu) return { left, top, buttonVisible, menu, layout: null, lineElement };
           const list = menu.querySelector<HTMLElement>('.line-insert-list')!;
           const rect = menu.getBoundingClientRect();
           const desired = Math.min(420, list.scrollHeight + rect.height - list.clientHeight);
@@ -134,7 +137,7 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
           const above = anchorTop - 8;
           const up = below < desired && above > below;
           const height = Math.max(0, Math.min(desired, up ? above : below));
-          return { left, top, buttonVisible, menu, layout: {
+          return { left, top, buttonVisible, menu, lineElement, layout: {
             left: Math.max(8, Math.min(this.slash ? point.left : left + button.width, win.innerWidth - rect.width - 8)),
             top: up ? anchorTop - height : anchorTop + 24,
             height
@@ -149,6 +152,11 @@ export function lineInsertMenu(host: NativeInsertion, setIcon: (element: HTMLEle
             queueMicrotask(() => { if (!this.destroyed && this.target === target) this.close(); });
           }
           if (position) {
+            if (this.measuredLine !== position.lineElement) {
+              if (this.measuredLine) this.resizeObserver.unobserve(this.measuredLine);
+              this.measuredLine = position.lineElement;
+              this.resizeObserver.observe(this.measuredLine);
+            }
             Object.assign(this.button.style, { left: `${position.left}px`, top: `${position.top}px` });
             if (position.menu === this.menu && position.layout) Object.assign(this.menu!.style, {
               left: `${position.layout.left}px`, top: `${position.layout.top}px`, maxHeight: `${position.layout.height}px`, opacity: '1'

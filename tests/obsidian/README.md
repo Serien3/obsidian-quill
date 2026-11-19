@@ -93,7 +93,7 @@ node tests/obsidian/slash-menu.mjs <CDP地址> <临时vault路径>
 node tests/obsidian/insertion-layout.mjs <CDP地址> <临时vault路径>
 ```
 
-同样要求独立 userdata、可核验的 `quill-host-*/vault`，并预先安装、启用当前构建。脚本在源码模式和 Live Preview 中分别以 1400px、700px 视口对比插件开关前后的正文位置、宽度、换行和源码，检查宽窗口的「＋」位于正文栏左侧 8px 并与第一条可视行居中。结束恢复视口及插件启用状态。窄窗口空间不足时允许隐藏按钮；行号、折叠控件及其他主题需另行人工检查。
+同样要求独立 userdata、可核验的 `quill-host-*/vault`，并预先安装、启用当前构建。脚本在源码模式和 Live Preview 中分别以 1400px、700px 视口对比插件开关前后的正文位置、宽度、换行和源码，检查宽窗口的「＋」位于正文栏左侧 16px 并与第一条可视行居中。结束恢复视口及插件启用状态。窄窗口空间不足时允许隐藏按钮；行号、折叠控件及其他主题需另行人工检查。
 
 ## 测试边界
 

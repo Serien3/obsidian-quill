@@ -627,7 +627,7 @@ test.each([false, true])('enabling and removing insertion preserves the host lay
   view.dispatch({ effects: insertion.reconfigure(entry.extension) });
   await vi.waitFor(() => expect(plus()?.style.visibility).toBe('visible'));
   expect(snapshot()).toEqual(enabled);
-  expect(plus()!.getBoundingClientRect().right).toBeCloseTo(enabled.left - 8, 0);
+  expect(plus()!.getBoundingClientRect().right).toBeCloseTo(enabled.left - 16, 0);
 });
 
 test.each(['', '# 大标题', '  - 缩进列表', '> 引用'])('entry aligns with the content column and first row for %j', async doc => {
@@ -637,7 +637,7 @@ test.each(['', '# 大标题', '  - 缩进列表', '> 引用'])('entry aligns wit
   await vi.waitFor(() => expect(plus()?.style.visibility).toBe('visible'));
   const button = plus()!.getBoundingClientRect();
   const first = view.coordsAtPos(0)!;
-  expect(button.right).toBeCloseTo(view.contentDOM.getBoundingClientRect().left + 40 - 8, 0);
+  expect(button.right).toBeCloseTo(view.contentDOM.getBoundingClientRect().left + 40 - 16, 0);
   expect((button.top + button.bottom) / 2).toBeCloseTo((first.top + first.bottom) / 2, 0);
   expect(button.width).toBe(24);
   expect(button.height).toBe(24);
@@ -648,11 +648,43 @@ test('entry follows centered content when its pane resizes without a window resi
   view.dom.parentElement!.style.width = '800px';
   Object.assign(view.contentDOM.style, { flex: '0 0 auto', width: '320px', marginInline: 'auto' });
   await vi.waitFor(() => expect(plus()?.style.visibility).toBe('visible'));
-  await vi.waitFor(() => expect(plus()!.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect().left - 8, 0));
+  await vi.waitFor(() => expect(plus()!.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect().left - 16, 0));
   const left = plus()!.getBoundingClientRect().left;
   view.dom.parentElement!.style.width = '600px';
   await vi.waitFor(() => expect(plus()!.getBoundingClientRect().left).toBeCloseTo(left - 100, 0));
-  expect(plus()!.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect().left - 8, 0);
+  expect(plus()!.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect().left - 16, 0);
+});
+
+test('entry uses an inset line box rather than the full-width content container', async () => {
+  const { view, insertion, entry } = fixture('正文内容', [], [EditorView.theme({
+    '.cm-line': { maxWidth: '320px', marginInline: 'auto' }
+  })]);
+  view.contentDOM.style.paddingLeft = '0';
+  await vi.waitFor(() => expect(plus()?.style.visibility).toBe('visible'));
+  const line = view.contentDOM.querySelector('.cm-line')!;
+  const rect = line.getBoundingClientRect();
+  expect(rect.left - view.contentDOM.getBoundingClientRect().left).toBeGreaterThan(40);
+  expect(plus()!.getBoundingClientRect().right).toBeCloseTo(rect.left - 16, 0);
+  view.dispatch({ effects: insertion.reconfigure([]) });
+  await measured();
+  expect(line.getBoundingClientRect().left).toBe(rect.left);
+  view.dispatch({ effects: insertion.reconfigure(entry.extension) });
+  await vi.waitFor(() => expect(plus()?.style.visibility).toBe('visible'));
+  const button = plus()!.getBoundingClientRect();
+  await userEvent.click(document.elementFromPoint(button.left + 12, button.top + 12)!);
+  await vi.waitFor(() => expect(menu()).not.toBeNull());
+});
+
+test('entry follows line reflow even when the editor and content container keep their size', async () => {
+  const { view } = fixture('正文', [], [EditorView.theme({ '.cm-line': { maxWidth: '320px', marginInline: 'auto' } })]);
+  view.contentDOM.style.paddingLeft = '0';
+  await vi.waitFor(() => expect(plus()?.style.visibility).toBe('visible'));
+  const line = view.contentDOM.querySelector<HTMLElement>('.cm-line')!;
+  const left = plus()!.getBoundingClientRect().left;
+  const width = view.contentDOM.getBoundingClientRect().width;
+  line.style.maxWidth = '280px';
+  await vi.waitFor(() => expect(plus()!.getBoundingClientRect().left).toBeCloseTo(left + 20, 0));
+  expect(view.contentDOM.getBoundingClientRect().width).toBe(width);
 });
 
 test('insufficient space hides only the button while the command and an open menu stay usable', async () => {
@@ -677,7 +709,7 @@ test('the paragraph entry clears line numbers and folding controls and does not 
   const left = line.getBoundingClientRect().left;
   const bandLeft = button.getBoundingClientRect().left;
   expect(button.getBoundingClientRect().left).toBeGreaterThanOrEqual(view.dom.querySelector('.cm-gutters')!.getBoundingClientRect().right);
-  expect(button.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.getBoundingClientRect().left + 40 - 8, 0);
+  expect(button.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.getBoundingClientRect().left + 40 - 16, 0);
   expect(view.dom.querySelector('.cm-foldGutter')).not.toBeNull();
   const rect = button.getBoundingClientRect();
   expect(document.elementFromPoint(rect.left + 12, rect.top + 12)).toBe(button);
@@ -719,7 +751,7 @@ test('menu geometry uses its own document window rather than the main window', a
   await vi.waitFor(() => expect(ownMenu.style.opacity).toBe('1'));
   const ownButton = owner.querySelector<HTMLElement>('.line-insert-button')!;
   expect(ownButton.style.visibility).toBe('visible');
-  expect(ownButton.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect().left - 8, 0);
+  expect(ownButton.getBoundingClientRect().right).toBeCloseTo(view.contentDOM.querySelector('.cm-line')!.getBoundingClientRect().left - 16, 0);
   const rect = ownMenu.getBoundingClientRect();
   expect(rect.right).toBeLessThanOrEqual(owner.defaultView!.innerWidth);
   expect(rect.bottom).toBeLessThanOrEqual(owner.defaultView!.innerHeight);
